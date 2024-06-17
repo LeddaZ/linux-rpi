@@ -1181,6 +1181,8 @@ static void sdhci_prepare_data(struct sdhci_host *host, struct mmc_command *cmd)
 		}
 	}
 
+	sdhci_config_dma(host);
+
 	if (host->flags & SDHCI_REQ_USE_DMA) {
 		int sg_cnt = sdhci_pre_dma_transfer(host, data, COOKIE_MAPPED);
 
@@ -1199,8 +1201,6 @@ static void sdhci_prepare_data(struct sdhci_host *host, struct mmc_command *cmd)
 			sdhci_set_sdma_addr(host, sdhci_sdma_address(host));
 		}
 	}
-
-	sdhci_config_dma(host);
 
 	if (!(host->flags & SDHCI_REQ_USE_DMA)) {
 		int flags;
@@ -1727,6 +1727,12 @@ static bool sdhci_send_command(struct sdhci_host *host, struct mmc_command *cmd)
 
 	if (host->use_external_dma)
 		sdhci_external_dma_pre_transfer(host, cmd);
+
+	if (host->quirks2 & SDHCI_QUIRK2_SPURIOUS_INT_RESP) {
+		host->ier |= SDHCI_INT_RESPONSE;
+		sdhci_writel(host, host->ier, SDHCI_INT_ENABLE);
+		sdhci_writel(host, host->ier, SDHCI_SIGNAL_ENABLE);
+	}
 
 	sdhci_writew(host, SDHCI_MAKE_CMD(cmd->opcode, flags), SDHCI_COMMAND);
 
@@ -3071,6 +3077,15 @@ static void sdhci_card_event(struct mmc_host *mmc)
 	spin_unlock_irqrestore(&host->lock, flags);
 }
 
+static int sdhci_init_sd_express(struct mmc_host *mmc, struct mmc_ios *ios)
+{
+	struct sdhci_host *host = mmc_priv(mmc);
+
+	if (!host->ops->init_sd_express)
+		return -EOPNOTSUPP;
+	return host->ops->init_sd_express(host, ios);
+}
+
 static const struct mmc_host_ops sdhci_ops = {
 	.request	= sdhci_request,
 	.post_req	= sdhci_post_req,
@@ -3086,6 +3101,7 @@ static const struct mmc_host_ops sdhci_ops = {
 	.execute_tuning			= sdhci_execute_tuning,
 	.card_event			= sdhci_card_event,
 	.card_busy	= sdhci_card_busy,
+	.init_sd_express = sdhci_init_sd_express,
 };
 
 /*****************************************************************************\
@@ -3320,6 +3336,11 @@ static void sdhci_cmd_irq(struct sdhci_host *host, u32 intmask, u32 *intmask_p)
 		if (intmask & SDHCI_INT_TIMEOUT) {
 			host->cmd->error = -ETIMEDOUT;
 			sdhci_err_stats_inc(host, CMD_TIMEOUT);
+			if (host->quirks2 & SDHCI_QUIRK2_SPURIOUS_INT_RESP) {
+				host->ier &= ~SDHCI_INT_RESPONSE;
+				sdhci_writel(host, host->ier, SDHCI_INT_ENABLE);
+				sdhci_writel(host, host->ier, SDHCI_SIGNAL_ENABLE);
+			}
 		} else {
 			host->cmd->error = -EILSEQ;
 			if (!mmc_op_tuning(host->cmd->opcode))
@@ -4604,6 +4625,15 @@ int sdhci_setup_host(struct sdhci_host *host)
 	if ((host->caps1 & SDHCI_SUPPORT_DDR50) &&
 	    !(host->quirks2 & SDHCI_QUIRK2_BROKEN_DDR50))
 		mmc->caps |= MMC_CAP_UHS_DDR50;
+
+	if (host->quirks2 & SDHCI_QUIRK2_NO_SDR25)
+		mmc->caps &= ~MMC_CAP_UHS_SDR25;
+
+	if (host->quirks2 & SDHCI_QUIRK2_NO_SDR50)
+		mmc->caps &= ~MMC_CAP_UHS_SDR50;
+
+	if (host->quirks2 & SDHCI_QUIRK2_NO_SDR104)
+		mmc->caps &= ~MMC_CAP_UHS_SDR104;
 
 	/* Does the host need tuning for SDR50? */
 	if (host->caps1 & SDHCI_USE_SDR50_TUNING)

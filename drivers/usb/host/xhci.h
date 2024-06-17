@@ -815,6 +815,8 @@ struct xhci_command {
 	struct completion		*completion;
 	union xhci_trb			*command_trb;
 	struct list_head		cmd_list;
+	/* xHCI command response timeout in milliseconds */
+	unsigned int			timeout_ms;
 };
 
 /* drop context bitmasks */
@@ -1570,11 +1572,15 @@ struct xhci_td {
 	struct xhci_segment	*bounce_seg;
 	/* actual_length of the URB has already been set */
 	bool			urb_length_set;
+	bool			error_mid_td;
 	unsigned int		num_trbs;
 };
 
-/* xHCI command default timeout value */
-#define XHCI_CMD_DEFAULT_TIMEOUT	(5 * HZ)
+/*
+ * xHCI command default timeout value in milliseconds.
+ * USB 3.2 spec, section 9.2.6.1
+ */
+#define XHCI_CMD_DEFAULT_TIMEOUT	5000
 
 /* command descriptor */
 struct xhci_cd {
@@ -1900,10 +1906,12 @@ struct xhci_hcd {
 #define XHCI_EP_CTX_BROKEN_DCS	BIT_ULL(42)
 #define XHCI_SUSPEND_RESUME_CLKS	BIT_ULL(43)
 #define XHCI_RESET_TO_DEFAULT	BIT_ULL(44)
-#define XHCI_AVOID_DQ_ON_LINK	BIT_ULL(45)
-#define XHCI_VLI_TRB_CACHE_BUG	BIT_ULL(46)
-#define XHCI_VLI_SS_BULK_OUT_BUG	BIT_ULL(47)
-#define XHCI_VLI_HUB_TT_QUIRK	BIT_ULL(48)
+#define XHCI_ZHAOXIN_TRB_FETCH	BIT_ULL(45)
+#define XHCI_ZHAOXIN_HOST	BIT_ULL(46)
+#define XHCI_AVOID_DQ_ON_LINK	BIT_ULL(56)
+#define XHCI_VLI_SS_BULK_OUT_BUG	BIT_ULL(57)
+#define XHCI_VLI_HUB_TT_QUIRK	BIT_ULL(58)
+#define XHCI_VLI_TRB_CACHE_BUG	BIT_ULL(59)
 
 	unsigned int		num_active_eps;
 	unsigned int		limit_active_eps;

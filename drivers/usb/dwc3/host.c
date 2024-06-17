@@ -10,8 +10,29 @@
 #include <linux/irq.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
+#include <linux/usb.h>
+#include <linux/usb/hcd.h>
 
+#include "../host/xhci-plat.h"
 #include "core.h"
+
+static void dwc3_xhci_plat_start(struct usb_hcd *hcd)
+{
+	struct platform_device *pdev;
+	struct dwc3 *dwc;
+
+	if (!usb_hcd_is_primary_hcd(hcd))
+		return;
+
+	pdev = to_platform_device(hcd->self.controller);
+	dwc = dev_get_drvdata(pdev->dev.parent);
+
+	dwc3_enable_susphy(dwc, true);
+}
+
+static const struct xhci_plat_priv dwc3_xhci_plat_quirk = {
+	.plat_start = dwc3_xhci_plat_start,
+};
 
 static void dwc3_host_fill_xhci_irq_res(struct dwc3 *dwc,
 					int irq, char *name)
@@ -30,10 +51,10 @@ static void dwc3_host_fill_xhci_irq_res(struct dwc3 *dwc,
 
 static int dwc3_host_get_irq(struct dwc3 *dwc)
 {
-	struct platform_device	*dwc3_pdev = to_platform_device(dwc->dev);
+	struct platform_device	*pdev = to_platform_device(dwc->dev);
 	int irq;
 
-	irq = platform_get_irq_byname_optional(dwc3_pdev, "host");
+	irq = platform_get_irq_byname_optional(pdev, "host");
 	if (irq > 0) {
 		dwc3_host_fill_xhci_irq_res(dwc, irq, "host");
 		goto out;
@@ -42,7 +63,7 @@ static int dwc3_host_get_irq(struct dwc3 *dwc)
 	if (irq == -EPROBE_DEFER)
 		goto out;
 
-	irq = platform_get_irq_byname_optional(dwc3_pdev, "dwc_usb3");
+	irq = platform_get_irq_byname_optional(pdev, "dwc_usb3");
 	if (irq > 0) {
 		dwc3_host_fill_xhci_irq_res(dwc, irq, "dwc_usb3");
 		goto out;
@@ -51,7 +72,7 @@ static int dwc3_host_get_irq(struct dwc3 *dwc)
 	if (irq == -EPROBE_DEFER)
 		goto out;
 
-	irq = platform_get_irq(dwc3_pdev, 0);
+	irq = platform_get_irq(pdev, 0);
 	if (irq > 0) {
 		dwc3_host_fill_xhci_irq_res(dwc, irq, NULL);
 		goto out;
@@ -66,16 +87,23 @@ out:
 
 int dwc3_host_init(struct dwc3 *dwc)
 {
-	struct property_entry	props[4];
+	struct platform_device	*pdev = to_platform_device(dwc->dev);
+	struct property_entry	props[5];
 	struct platform_device	*xhci;
 	int			ret, irq;
 	int			prop_idx = 0;
+	int			id;
 
 	irq = dwc3_host_get_irq(dwc);
 	if (irq < 0)
 		return irq;
 
-	xhci = platform_device_alloc("xhci-hcd", PLATFORM_DEVID_AUTO);
+	id = of_alias_get_id(pdev->dev.of_node, "usb");
+	if (id >= 0)
+		xhci = platform_device_alloc("xhci-hcd", id);
+	else
+		xhci = platform_device_alloc("xhci-hcd", PLATFORM_DEVID_AUTO);
+
 	if (!xhci) {
 		dev_err(dwc->dev, "couldn't allocate xHCI device\n");
 		return -ENOMEM;
@@ -93,6 +121,8 @@ int dwc3_host_init(struct dwc3 *dwc)
 	}
 
 	memset(props, 0, sizeof(struct property_entry) * ARRAY_SIZE(props));
+
+	props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-sg-trb-cache-size-quirk");
 
 	if (dwc->usb3_lpm_capable)
 		props[prop_idx++] = PROPERTY_ENTRY_BOOL("usb3-lpm-capable");
@@ -120,6 +150,11 @@ int dwc3_host_init(struct dwc3 *dwc)
 		}
 	}
 
+	ret = platform_device_add_data(xhci, &dwc3_xhci_plat_quirk,
+				       sizeof(struct xhci_plat_priv));
+	if (ret)
+		goto err;
+
 	ret = platform_device_add(xhci);
 	if (ret) {
 		dev_err(dwc->dev, "failed to register xHCI device\n");
@@ -134,6 +169,7 @@ err:
 
 void dwc3_host_exit(struct dwc3 *dwc)
 {
+	dwc3_enable_susphy(dwc, false);
 	platform_device_unregister(dwc->xhci);
 	dwc->xhci = NULL;
 }

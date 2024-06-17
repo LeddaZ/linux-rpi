@@ -742,8 +742,10 @@ int w1_attach_slave_device(struct w1_master *dev, struct w1_reg_num *rn)
 	atomic_set(&sl->refcnt, 1);
 	atomic_inc(&sl->master->refcnt);
 	dev->slave_count++;
+#if 0
 	dev_info(&dev->dev, "Attaching one wire slave %02x.%012llx crc %02x\n",
 		  rn->family, (unsigned long long)rn->id, rn->crc);
+#endif
 
 	/* slave modules need to be loaded in a context with unlocked mutex */
 	mutex_unlock(&dev->mutex);
@@ -1263,10 +1265,10 @@ err_out_exit_init:
 
 static void __exit w1_fini(void)
 {
-	struct w1_master *dev;
+	struct w1_master *dev, *n;
 
 	/* Set netlink removal messages and some cleanup */
-	list_for_each_entry(dev, &w1_masters, w1_master_entry)
+	list_for_each_entry_safe(dev, n, &w1_masters, w1_master_entry)
 		__w1_remove_master_device(dev);
 
 	w1_fini_netlink();

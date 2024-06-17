@@ -203,7 +203,7 @@ config GPIO_BCM_VIRT
 config GPIO_BRCMSTB
 	tristate "BRCMSTB GPIO support"
 	default y if (ARCH_BRCMSTB || BMIPS_GENERIC)
-	depends on OF_GPIO && (ARCH_BRCMSTB || BMIPS_GENERIC || COMPILE_TEST)
+	depends on OF_GPIO && (ARCH_BRCMSTB || BMIPS_GENERIC || ARCH_BCM2835 || COMPILE_TEST)
 	select GPIO_GENERIC
 	select IRQ_DOMAIN
 	help
@@ -693,7 +693,8 @@ config GPIO_UNIPHIER
 	  Say yes here to support UniPhier GPIOs.
 
 config GPIO_VF610
-	def_bool y
+	bool "VF610 GPIO support"
+	default y if SOC_VF610
 	depends on ARCH_MXC
 	select GPIOLIB_IRQCHIP
 	help

@@ -107,7 +107,9 @@ static int __must_check smsc95xx_read_reg(struct usbnet *dev, u32 index,
 	ret = fn(dev, USB_VENDOR_REQUEST_READ_REGISTER, USB_DIR_IN
 		 | USB_TYPE_VENDOR | USB_RECIP_DEVICE,
 		 0, index, &buf, 4);
-	if (ret < 0) {
+	if (ret < 4) {
+		ret = ret < 0 ? ret : -ENODATA;
+
 		if (ret != -ENODEV)
 			netdev_warn(dev->net, "Failed to read reg index 0x%08x: %d\n",
 				    index, ret);
@@ -812,49 +814,18 @@ static int smsc95xx_ioctl(struct net_device *netdev, struct ifreq *rq, int cmd)
 }
 
 /* Check the macaddr module parameter for a MAC address */
-static int smsc95xx_is_macaddr_param(struct usbnet *dev, struct net_device *nd)
+static int smsc95xx_macaddr_param(struct usbnet *dev, struct net_device *nd)
 {
-       int i, j, got_num, num;
-       u8 mtbl[ETH_ALEN];
+	u8 mtbl[ETH_ALEN];
 
-       if (macaddr[0] == ':')
-               return 0;
-
-       i = 0;
-       j = 0;
-       num = 0;
-       got_num = 0;
-       while (j < ETH_ALEN) {
-               if (macaddr[i] && macaddr[i] != ':') {
-                       got_num++;
-                       if ('0' <= macaddr[i] && macaddr[i] <= '9')
-                               num = num * 16 + macaddr[i] - '0';
-                       else if ('A' <= macaddr[i] && macaddr[i] <= 'F')
-                               num = num * 16 + 10 + macaddr[i] - 'A';
-                       else if ('a' <= macaddr[i] && macaddr[i] <= 'f')
-                               num = num * 16 + 10 + macaddr[i] - 'a';
-                       else
-                               break;
-                       i++;
-               } else if (got_num == 2) {
-                       mtbl[j++] = (u8) num;
-                       num = 0;
-                       got_num = 0;
-                       i++;
-               } else {
-                       break;
-               }
-       }
-
-       if (j == ETH_ALEN) {
-               netif_dbg(dev, ifup, dev->net, "Overriding MAC address with: "
-               "%02x:%02x:%02x:%02x:%02x:%02x\n", mtbl[0], mtbl[1], mtbl[2],
-                                               mtbl[3], mtbl[4], mtbl[5]);
-	       dev_addr_mod(nd, 0, mtbl, ETH_ALEN);
-               return 1;
-       } else {
-               return 0;
-       }
+	if (mac_pton(macaddr, mtbl)) {
+		netif_dbg(dev, ifup, dev->net,
+			  "Overriding MAC address with: %pM\n", mtbl);
+		dev_addr_mod(nd, 0, mtbl, ETH_ALEN);
+		return 0;
+	} else {
+		return -EINVAL;
+	}
 }
 
 static void smsc95xx_init_mac_address(struct usbnet *dev)
@@ -881,8 +852,12 @@ static void smsc95xx_init_mac_address(struct usbnet *dev)
 	}
 
 	/* Check module parameters */
-	if (smsc95xx_is_macaddr_param(dev, dev->net))
-		return;
+	if (smsc95xx_macaddr_param(dev, dev->net) == 0) {
+		if (is_valid_ether_addr(dev->net->dev_addr)) {
+			netif_dbg(dev, ifup, dev->net, "MAC address read from module parameter\n");
+			return;
+		}
+	}
 
 	/* no useful static MAC address found. generate a random one */
 	eth_hw_addr_random(dev->net);
@@ -959,7 +934,7 @@ static int smsc95xx_reset(struct usbnet *dev)
 
 	if (timeout >= 100) {
 		netdev_warn(dev->net, "timeout waiting for completion of Lite Reset\n");
-		return ret;
+		return -ETIMEDOUT;
 	}
 
 	ret = smsc95xx_set_mac_address(dev);
@@ -2165,6 +2140,11 @@ static const struct usb_device_id products[] = {
 		/* SMSC LAN89530 USB Ethernet Device */
 		USB_DEVICE(0x0424, 0x9E08),
 		.driver_info = (unsigned long) &smsc95xx_info,
+	},
+	{
+		/* SYSTEC USB-SPEmodule1 10BASE-T1L Ethernet Device */
+		USB_DEVICE(0x0878, 0x1400),
+		.driver_info = (unsigned long)&smsc95xx_info,
 	},
 	{
 		/* Microchip's EVB-LAN8670-USB 10BASE-T1S Ethernet Device */

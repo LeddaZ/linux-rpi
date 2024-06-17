@@ -206,28 +206,28 @@ static const struct bcm2835_codec_fmt supported_formats[] = {
 	}, {
 		.fourcc			= V4L2_PIX_FMT_YUYV,
 		.depth			= 16,
-		.bytesperline_align	= { 32, 32, 32, 32, 32 },
+		.bytesperline_align	= { 64, 64, 64, 64, 64 },
 		.flags			= 0,
 		.mmal_fmt		= MMAL_ENCODING_YUYV,
 		.size_multiplier_x2	= 2,
 	}, {
 		.fourcc			= V4L2_PIX_FMT_UYVY,
 		.depth			= 16,
-		.bytesperline_align	= { 32, 32, 32, 32, 32 },
+		.bytesperline_align	= { 64, 64, 64, 64, 64 },
 		.flags			= 0,
 		.mmal_fmt		= MMAL_ENCODING_UYVY,
 		.size_multiplier_x2	= 2,
 	}, {
 		.fourcc			= V4L2_PIX_FMT_YVYU,
 		.depth			= 16,
-		.bytesperline_align	= { 32, 32, 32, 32, 32 },
+		.bytesperline_align	= { 64, 64, 64, 64, 64 },
 		.flags			= 0,
 		.mmal_fmt		= MMAL_ENCODING_YVYU,
 		.size_multiplier_x2	= 2,
 	}, {
 		.fourcc			= V4L2_PIX_FMT_VYUY,
 		.depth			= 16,
-		.bytesperline_align	= { 32, 32, 32, 32, 32 },
+		.bytesperline_align	= { 64, 64, 64, 64, 64 },
 		.flags			= 0,
 		.mmal_fmt		= MMAL_ENCODING_VYUY,
 		.size_multiplier_x2	= 2,
@@ -2883,7 +2883,7 @@ static int bcm2835_codec_buf_prepare(struct vb2_buffer *vb)
 	}
 
 	if (vb2_plane_size(vb, 0) < q_data->sizeimage) {
-		v4l2_err(&ctx->dev->v4l2_dev, "%s data will not fit into plane (%lu < %lu)\n",
+		v4l2_dbg(1, debug, &ctx->dev->v4l2_dev, "%s data will not fit into plane (%lu < %lu)\n",
 			 __func__, vb2_plane_size(vb, 0),
 			 (long)q_data->sizeimage);
 		return -EINVAL;

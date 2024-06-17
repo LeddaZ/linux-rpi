@@ -191,7 +191,7 @@ struct drm_bridge_funcs {
 	 * or &drm_encoder_helper_funcs.dpms hook.
 	 *
 	 * The bridge must assume that the display pipe (i.e. clocks and timing
-	 * singals) feeding it is no longer running when this callback is
+	 * signals) feeding it is no longer running when this callback is
 	 * called.
 	 *
 	 * The @post_disable callback is optional.
@@ -769,13 +769,13 @@ struct drm_bridge {
 	 */
 	bool interlace_allowed;
 	/**
-	 * @pre_enable_upstream_first: The bridge requires that the upstream
+	 * @pre_enable_prev_first: The bridge requires that the prev
 	 * bridge @pre_enable function is called before its @pre_enable,
 	 * and conversely for post_disable. This is most frequently a
 	 * requirement for DSI devices which need the host to be initialised
 	 * before the peripheral.
 	 */
-	bool pre_enable_upstream_first;
+	bool pre_enable_prev_first;
 	/**
 	 * @ddc: Associated I2C adapter for DDC access, if any.
 	 */
